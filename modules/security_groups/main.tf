@@ -1,50 +1,48 @@
-resource "aws_security_group" "public_ec2_sg" {
-  name        = "public-ec2-sg"
-  description = "Allow SSH inbound traffic"
+# modules/security_groups/main.tf
+resource "aws_security_group" "this" {
+  name        = var.name
+  description = var.description
   vpc_id      = var.vpc_id
 
+  # Ingress rules
   dynamic "ingress" {
-    for_each = var.security_group_ingress
+    for_each = var.ingress_rules
     content {
-      description = "description ${ingress.key}"
-      from_port   = ingress.value
-      to_port     = ingress.value
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
+      description      = ingress.value.description
+      from_port        = ingress.value.from_port
+      to_port          = ingress.value.to_port
+      protocol         = ingress.value.protocol
+      cidr_blocks      = lookup(ingress.value, "ipv4_cidr_blocks", null)
+      ipv6_cidr_blocks = lookup(ingress.value, "ipv6_cidr_blocks", null)
+      security_groups  = lookup(ingress.value, "security_groups", null)
+      self             = lookup(ingress.value, "self", false)
     }
   }
+
+  # Egress rules
+  dynamic "egress" {
+    for_each = var.egress_rules
+    content {
+      description      = egress.value.description
+      from_port        = egress.value.from_port
+      to_port          = egress.value.to_port
+      protocol         = egress.value.protocol
+      cidr_blocks      = lookup(egress.value, "ipv4_cidr_blocks", null)
+      ipv6_cidr_blocks = lookup(egress.value, "ipv6_cidr_blocks", null)
+      security_groups  = lookup(egress.value, "security_groups", null)
+      self             = lookup(egress.value, "self", false)
+    }
+  }
+
   tags = merge(
     {
-      Name = "${var.vpc_name}-allow-ssh"
+      Name = var.name
     },
     var.tags
   )
 }
 
-resource "aws_security_group" "allow_http" {
-  name        = "${var.vpc_name}-allow-http"
-  description = "Allow HTTP inbound traffic"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    {
-      Name = "${var.vpc_name}-allow-http"
-    },
-    var.tags
-  )
+output "security_group_id" {
+  description = "The ID of the security group"
+  value       = aws_security_group.this.id
 }
